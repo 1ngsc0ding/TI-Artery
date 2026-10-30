@@ -1,0 +1,70 @@
+# Patient/source datasets and ultrasound exports
+data/
+datasets/
+**/DICOM/
+**/*.dcm
+**/*.dicom
+**/*.nii
+**/*.nii.gz
+
+# Image data, examples, predictions and overlays (may contain patient data)
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.gif
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.mpeg
+*.mpg
+
+# Model weights/checkpoints: publish separately using model artifact storage
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# Training/evaluation outputs and logs
+runs/
+eval_out/
+evaluation/accuracy_*/
+*.log
+*.log.*
+*.jsonl
+events.out.tfevents.*
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*secret*
+*credential*
+*token*
+
+# Python environments, caches and build outputs
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+build/
+dist/
+*.egg-info/
+
+# Editors and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

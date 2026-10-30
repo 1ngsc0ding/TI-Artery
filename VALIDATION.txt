@@ -1,0 +1,3 @@
+Passed: 9 unit tests, including supervisor integration using a simulated trainer.
+Passed: Python compileall.
+No full GPU training or new real-data F1 evaluation.

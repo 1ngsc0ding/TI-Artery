@@ -1,9 +1,0 @@
-# ติดตั้ง PyTorch ก่อนตามการ์ดจอของเครื่อง:
-# - มี GPU (NVIDIA): ดูคำสั่งที่ https://pytorch.org/get-started/locally/
-#   เช่น pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-# - ไม่มี GPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
-numpy>=1.24
-opencv-python-headless>=4.8
-pillow>=10.0
-gradio>=4.0
-scikit-image>=0.21

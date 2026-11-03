@@ -5,34 +5,18 @@ simply counts elevated findings so a clinician can see exactly why a
 case was flagged. Final decision always stays with the physician
 (human-in-the-loop, per proposal).
 """
-DISCLAIMER = ("Unvalidated rule-based screening score, not a stroke probability or diagnosis. "
+DISCLAIMER = ("Screening support only - not a diagnosis. "
               "A qualified physician must review every result.")
 
 
 def assess_risk(imt_mean_mm: float | None,
                 tpa_mm2: float | None,
-                plaque_present: bool | None,
+                plaque_present: bool,
                 age: int | None = None,
                 sbp: float | None = None,
                 ldl: float | None = None,
-                smoking: bool | None = None,
-                diabetes: bool | None = None) -> dict:
-    missing = []
-    if imt_mean_mm is None:
-        missing.append("A calibrated IMT measurement is unavailable.")
-    if tpa_mm2 is None:
-        missing.append("Calibrated plaque area is unavailable.")
-    if plaque_present is None:
-        missing.append("Plaque assessment is unavailable.")
-    for value, label in ((age, "Age"), (sbp, "Systolic blood pressure"),
-                         (ldl, "LDL"), (smoking, "Smoking status"),
-                         (diabetes, "Diabetes status")):
-        if value is None:
-            missing.append(f"{label} was not provided.")
-    if missing:
-        return {"tier": "unavailable", "score": None, "reasons": missing,
-                "disclaimer": DISCLAIMER}
-
+                smoking: bool = False,
+                diabetes: bool = False) -> dict:
     score, reasons = 0, []
 
     # --- imaging findings ---

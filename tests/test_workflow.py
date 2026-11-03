@@ -147,14 +147,41 @@ class ResultDisplayTests(unittest.TestCase):
                             "assumed_spacing_mm": 0.1, "calibrated": False,
                             "note": "uncalibrated: pixel spacing unknown, areas are in px^2 not mm^2"},
             imt={"mean_imt_mm": None, "mean_imt_px": 6.2, "max_imt_px": 7.1,
-                 "mean_imt_mm_est": 0.62,
+                 "mean_imt_mm_est": 0.62, "assumed_spacing_mm": 0.1,
                  "measurement_failed": False, "note": "Geometry from far-wall LI/MA"},
             imt_class="unknown",
+            risk={"tier": "unavailable", "score": None, "reasons": []},
+            risk_unavailable_reasons=[
+                "A calibrated IMT measurement is unavailable; demo estimates are excluded from scoring.",
+                "Calibrated plaque area is unavailable; scanner pixel spacing is required.",
+            ],
         )
         rendered = summary_card(res).lower()
-        self.assertIn("assumed pixel spacing", rendered)
+        self.assertIn("uncalibrated plaque measurements", rendered)
+        self.assertIn("length 30.0 px", rendered)
+        self.assertIn("thickness 5.0 px", rendered)
+        self.assertIn("area 90 px²", rendered)
         self.assertIn("uncalibrated imt", rendered)
-        self.assertIn("not used for scoring", rendered)
+        self.assertIn("risk assessment unavailable", rendered)
+        self.assertIn("scanner pixel spacing is required for calibrated imt and plaque area", rendered)
+        self.assertNotIn("assumed pixel spacing", rendered)
+        self.assertNotIn("demo estimate", rendered)
+        self.assertNotIn("3.0 mm", rendered)
+        self.assertNotIn("0.5 mm", rendered)
+        self.assertNotIn("0.62 mm", rendered)
+        self.assertNotIn("mm²", rendered)
+        self.assertNotIn("extensive plaque", rendered)
+        self.assertNotIn("refer for specialist evaluation", rendered)
+
+    def test_calibrated_plaque_keeps_size_classification_and_recommendation(self):
+        from tiartery.report import summary_card
+        rendered = summary_card(self._base(quantification={
+            "area_px": 900, "area_mm2": 36.0,
+            "length_mm": 25.0, "thickness_mm": 5.0,
+            "calibrated": True,
+        })).lower()
+        self.assertIn("25.0 mm — extensive plaque", rendered)
+        self.assertIn("refer for specialist evaluation", rendered)
         self.assertNotIn("imt 0.62 mm", rendered)
 
     def test_quality_failure_uses_blur_reason(self):
@@ -201,5 +228,37 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(b.shape,(320,320))
         self.assertTrue(np.all(b[:40]==0))
         np.testing.assert_allclose(restore_probability(b,a.shape,'letterbox'),a)
+
+    def test_missing_resize_mode_uses_matching_stretch_restore(self):
+        import numpy as np
+        from tiartery.geometry import resize_input, restore_probability
+        image = np.ones((60, 80), dtype=np.float32)
+        model_input = resize_input(image, 320, None)
+        self.assertTrue(np.all(model_input == 1))
+        restored = restore_probability(model_input, image.shape, None)
+        np.testing.assert_allclose(restored, image)
+
+    def test_predict_prob_pairs_transforms_when_model_mode_is_none(self):
+        from unittest.mock import patch
+        import numpy as np
+        import torch
+        from tiartery import segmentation
+
+        class StubModel(torch.nn.Module):
+            input_size = 16
+            resize_mode = None
+
+            def forward(self, x):
+                return torch.zeros_like(x)
+
+        image = np.ones((12, 20), dtype=np.float32)
+        with patch("tiartery.segmentation.resize_input",
+                   wraps=segmentation.resize_input) as resize, \
+             patch("tiartery.segmentation.restore_probability",
+                   wraps=segmentation.restore_probability) as restore:
+            segmentation.predict_prob(StubModel(), image)
+
+        self.assertEqual(resize.call_args.args[2], "stretch")
+        self.assertEqual(restore.call_args.args[2], "stretch")
 
 if __name__=='__main__': unittest.main()

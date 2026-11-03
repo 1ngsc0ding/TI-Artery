@@ -21,37 +21,20 @@ _ASSUMED_SPACING_MM = 0.10
 
 
 def _risk_unavailable_reasons(usable: bool, quality: dict, plaque_present,
-                              imt_res: dict, tpa_mm2,
-                              clinical: dict) -> list[str]:
-    """Return specific reasons a complete rule-based score cannot be shown."""
+                              imt_res: dict, clinical: dict) -> list[str]:
+    """Return reasons why a risk tier cannot be shown.
+
+    We only block on quality failure or missing plaque model.  IMT being
+    a demo estimate is allowed — the tier will display with a warning.
+    Clinical inputs are optional (omitted inputs simply don't add to the score).
+    """
     reasons = []
     if not usable:
         reasons.extend(pp.quality_issues(quality) or [
             "This frame did not pass image-quality checks."])
     if plaque_present is None:
         reasons.append("Plaque assessment is missing because the plaque model is not loaded.")
-    if imt_res.get("demo") or imt_res.get("mean_imt_mm") is None:
-        reasons.append("A calibrated IMT measurement is unavailable; demo estimates are excluded from scoring.")
-    if tpa_mm2 is None:
-        reasons.append("Calibrated plaque area is unavailable; scanner pixel spacing is required.")
-    for key, label in (("age", "Age"), ("sbp", "Systolic blood pressure"),
-                       ("ldl", "LDL"), ("smoking", "Smoking status"),
-                       ("diabetes", "Diabetes status")):
-        if clinical.get(key) is None:
-            reasons.append(f"{label} was not provided.")
     return reasons
-
-
-def _move_demo_mm_to_estimate(imt_res: dict) -> None:
-    """Keep demo millimetres visibly separate from calibrated measurements."""
-    mean_mm = imt_res.pop("mean_imt_mm", None)
-    max_mm = imt_res.pop("max_imt_mm", None)
-    if mean_mm is not None:
-        imt_res["mean_imt_mm_est"] = mean_mm
-    if max_mm is not None:
-        imt_res["max_imt_mm_est"] = max_mm
-    imt_res["mean_imt_mm"] = None
-    imt_res["max_imt_mm"] = None
 
 
 def run_pipeline(image_path: str,
@@ -128,17 +111,14 @@ def run_pipeline(image_path: str,
         imt_res = imt_mod.imt_from_wall_mask(wall, pixel_spacing_mm, prob=wall_prob)
         imt_res.pop("li_pts", None)
         imt_res.pop("ma_pts", None)
-        # Without scanner calibration, preserve pixel measurements and keep
-        # any assumed-scale conversion in estimate-only fields.
+        # Wall model succeeded but no pixel spacing → estimate mm with assumed spacing
         if not imt_res.get("measurement_failed") and imt_res.get("mean_imt_mm") is None:
-            imt_res["mean_imt_mm"] = None
-            imt_res["max_imt_mm"] = None
             mean_px = imt_res.get("mean_imt_px")
             max_px = imt_res.get("max_imt_px")
             if mean_px is not None:
-                imt_res["mean_imt_mm_est"] = round(float(mean_px) * _ASSUMED_SPACING_MM, 4)
-                imt_res["max_imt_mm_est"] = (round(float(max_px) * _ASSUMED_SPACING_MM, 4)
-                                             if max_px is not None else None)
+                imt_res["mean_imt_mm"] = round(float(mean_px) * _ASSUMED_SPACING_MM, 4)
+                imt_res["max_imt_mm"] = (round(float(max_px) * _ASSUMED_SPACING_MM, 4)
+                                         if max_px is not None else None)
                 imt_res["assumed_spacing_mm"] = _ASSUMED_SPACING_MM
                 imt_res["demo"] = True
                 imt_res["note"] = (
@@ -163,18 +143,13 @@ def run_pipeline(image_path: str,
             )
         if pixel_spacing_mm is None:
             demo_res["assumed_spacing_mm"] = _ASSUMED_SPACING_MM
-        if demo_res.get("gap_px") is not None:
-            demo_res["mean_imt_px"] = demo_res["gap_px"]
-            demo_res["max_imt_px"] = demo_res.get("gap_px_p90")
-        _move_demo_mm_to_estimate(demo_res)
         imt_res = demo_res
 
-    # Only a wall-model measurement with supplied scanner spacing is eligible.
-    imt_mean = None if imt_res.get("demo") else imt_res.get("mean_imt_mm")
+    imt_mean = imt_res.get("mean_imt_mm")
 
     # Risk integration — only block when image quality fails or plaque model absent.
     risk_blockers = _risk_unavailable_reasons(
-        usable, quality, plaque_present, imt_res, tpa, clinical)
+        usable, quality, plaque_present, imt_res, clinical)
     if risk_blockers:
         risk_res = {
             "tier": "unavailable",

@@ -33,7 +33,7 @@
 | Grayscale, normalize | ภาพเข้า segmentation เป็น grayscale; dataset/model ใช้ช่วง intensity ที่ normalize แล้ว. ใช้ทั้งเตรียมข้อมูลและ inference |
 | เลือกเฟรม | ถ้าเรียก video loader จะเลือกเฟรมคมที่สุดจากชุดเฟรมที่สุ่มสม่ำเสมอ; ไม่ได้ใช้กับ UI ปัจจุบันที่รับภาพนิ่ง |
 | Lee/SRAD | ในแอปสร้างภาพ denoised preview; ไม่ได้ป้อนเข้า segmentation. ไม่พบว่าใช้เป็น augmentation/training input |
-| Resize/letterbox | โมเดลรับขนาด 320×320. Letterbox รักษาสัดส่วนและเติมขอบ; training default/checkpoint plaque ระบุ letterbox. Wall checkpoint ไม่มี metadata resize mode ทำให้สถานะ inference มีปัญหาตามข้อ 9 |
+| Resize/letterbox | โมเดลรับขนาด 320×320. Letterbox รักษาสัดส่วนและเติมขอบ; plaque ระบุ letterbox. Wall checkpoint ไม่มี metadata resize mode; เมื่อเทียบ validation พบ stretch ทำซ้ำ Dice ใน checkpoint ได้ ส่วน letterbox ได้ Dice ต่ำกว่า จึงคง stretch สำหรับ checkpoint นี้และใช้ mode เดียวกันทั้ง resize/restore |
 | Augmentation | ระหว่างฝึก plaque: flip, หมุน/scale/translate, gamma/brightness/contrast, CLAHE และ noise; wall: flip, หมุนและปรับ intensity. ไม่ได้ใช้ใน inference (`train_plaque_unet.py`, `train_wall_unet.py`) |
 | Threshold | probability ≥ .5 เป็น foreground; plaque min component area ในแอป default 0 จึงไม่มี component cleanup (`app.py:30-31`; `evaluation/accuracy_20261030/REPORT.md:3,7`) |
 | Postprocessing | IMT เก็บองค์ประกอบ wall ที่เหมาะสมและใช้ขอบ sub-pixel จาก probability; plaque presence ตรวจจากพื้นที่ mask อย่างน้อย 50 px. การวัด geometry ทำหลัง segmentation ไม่ใช่โมเดล classification แยก |
@@ -51,9 +51,9 @@
 
 ## 6. การวัด IMT และ plaque
 
-**IMT:** `imt_from_wall_mask` หา LI และ MA จากขอบบน/ล่างของบริเวณ wall ตามคอลัมน์ ใช้ probability ช่วยประมาณขอบ sub-pixel แล้ววัดระยะตั้งฉากกับผนัง ได้ mean/max หน่วย px (`imt.py`; `pipeline.py:124-129`). เมื่อมี scanner spacing ที่เป็น finite และมากกว่า 0 จึงแปลงเป็น mm. เมื่อ blank/ไม่มี calibration จะคง `mean_imt_px`/`max_imt_px`; ค่า mm จากสมมติฐาน 0.10 mm/px อยู่เฉพาะ `*_mm_est`, ไม่เติม `mean_imt_mm`/`max_imt_mm` ที่ calibrated และไม่ส่งเข้า risk. classical CV fallback เป็น demo และแยก estimate fields เช่นกัน (`pipeline.py:18-20,131-170`). ค่า 0 หรือค่าลบไม่ยอมรับ (`pipeline.py:68-70`).
+**IMT:** `imt_from_wall_mask` หา LI และ MA จากขอบบน/ล่างของบริเวณ wall ตามคอลัมน์ ใช้ probability ช่วยประมาณขอบ sub-pixel แล้ววัดระยะตั้งฉากกับผนัง ได้ mean/max หน่วย px (`imt.py`; `pipeline.py:124-129`). เมื่อมี scanner spacing ที่เป็น finite และมากกว่า 0 จึงแปลงเป็น mm. เมื่อ blank/ไม่มี calibration คง `mean_imt_px`/`max_imt_px`; ค่า 0.10 mm/px หากคำนวณไว้จะอยู่ใน estimate fields แยก แต่รายงานหลักไม่แสดงค่า mm หรือ demo estimate. Risk ไม่รับค่าดังกล่าว. classical CV fallback เป็น demo เช่นกัน (`pipeline.py:18-20,131-170`). ค่า 0 หรือติดลบไม่ถือเป็น calibration (`pipeline.py:68-70`; callback แปลง 0 เป็น `None`).
 
-**Plaque:** พื้นที่ mask คือจำนวน pixel foreground; ความยาว/ความหนามาจาก contour และกรอบ min-area rectangle (`plaque.py`). ถ้ามี spacing `s` mm/px: length/thickness × `s`, area × `s²` เป็น mm². ถ้าไม่มี spacing ค่าจริงยังเป็น px²/px; แสดงค่าประมาณแยกด้วยสมมติฐาน 0.10 (`pipeline.py:101-115`). Risk ใช้เฉพาะ `area_mm2` ที่ calibrated ไม่ใช้ `area_mm2_est`.
+**Plaque:** พื้นที่ mask คือจำนวน pixel foreground; ความยาว/ความหนามาจาก contour และกรอบ min-area rectangle (`plaque.py`). ถ้ามี spacing `s` mm/px: length/thickness × `s`, area × `s²` เป็น mm². ถ้าไม่มี spacing รายงานหลักแสดงความยาว/ความหนาเป็น px และพื้นที่เป็น px²; ค่า estimate ที่ pipeline อาจคำนวณไว้จะไม่แสดง. ไม่มีการจัดชั้นขนาดหรือคำแนะนำจากมิติที่ไม่ calibrated. Risk ใช้เฉพาะ `area_mm2` ที่ calibrated ไม่ใช้ `area_mm2_est`.
 
 ## 7. คะแนนคัดกรอง
 
@@ -71,7 +71,8 @@
 | Plaque validation คำนวณซ้ำจาก checkpoint | 98 | .621561 | ไม่ได้รายงาน | — | ตรงกับ checkpoint ถึง precision ที่รายงาน |
 | Plaque `plaque_v3/test` (exploratory) | 52 (28 positive, 24 negative) | .6682 | .5017 | .5967 / .5259 | negative มี prediction 11/24 = 45.83% |
 | Wall checkpoint validation ที่บันทึก | 103 | .762632 | ไม่พบใน checkpoint | — | — |
-| Wall validation คำนวณซ้ำที่ 320 letterbox | 103 | .762632 | ไม่ได้รายงาน | — | ตรงกัน; letterbox อาศัย default เพราะ metadata หาย |
+| Wall validation, stretch | 103 | .762632 | .616333 global IoU | .715896 / .570884 | ตรงค่า checkpoint; ไม่พิสูจน์ training mode เพราะไม่มี config/run command |
+| Wall validation, letterbox | 103 | .725780 | .569588 global IoU | .681620 / .530429 | ต่ำกว่า stretch |
 | Wall CUBS test หลังตัดภาพซ้ำกับ train | 100 | .7446 | .5932 | .7305 / .5855 | IMT MAE .2740 mm (274 µm), n=100 |
 
 **การแยกตัวเลข:** validation Dice ที่ checkpoint บันทึกไม่ใช่ held-out test. ผล test wall 102 ภาพก่อนตัดซ้ำมี Dice .7454, IoU .5942, mean Dice .7316/IoU .5868 และ IMT MAE .27444 mm; ไม่ใช้เป็นค่าหลักเพราะมี exact duplicates. IMT MAE คือความต่างระหว่าง geometry จาก mask ที่โมเดลทำนายกับ `gt_imt_mm` ที่สร้างจาก LI/MA profile และใช้ calibration ต่อภาพ; เป็นการเทียบวิธีวัด ไม่ใช่ independent clinical truth. Plaque test ถูกใช้เลือกโมเดลและ patient split ไม่ทราบ จึงควรตีความอย่างระมัดระวัง. ผลเหล่านี้ไม่บอกความแม่นยำของ risk tier หรือ stroke.
@@ -83,9 +84,10 @@ Overlays ที่บันทึกไว้: plaque ดี `evaluation/accurac
 | ประเด็น | สถานะตาม snapshot |
 |---|---|
 | Demo/assumed-spacing IMT เคยไหลเข้าคะแนน | แก้แล้วในโค้ดปัจจุบัน: mm estimate แยกจาก calibrated value, demo ถูกกันออกจาก risk และข้อมูลไม่ครบแสดง unavailable. มี regression tests ในโครงการ แต่เอกสารนี้ไม่ได้รันทดสอบซ้ำ |
-| Blank/zero spacing | blank ทำให้คงหน่วย px และไม่สามารถให้ risk tier สมบูรณ์; zero ถูกปฏิเสธเป็นค่าที่ไม่ถูกต้อง. Assumed 0.10 ใช้แสดง estimate เท่านั้น ไม่ใช่ scanner calibration |
-| Wall checkpoint letterbox restore | ยังมีข้อบกพร่อง: checkpoint ไม่มี `resize_mode`, loader คืน `None`; preprocessing ปฏิบัติต่อ None เป็น letterbox แต่ restore crop padding เฉพาะเมื่อ mode เท่ากับ `letterbox`. จึงมีโอกาสคืน probability map ด้วย geometry ผิด. ผล wall metrics ข้างต้นใช้เส้นทาง inference ปัจจุบันและได้รับผลจากความเสี่ยงนี้ |
+| Blank/zero spacing | callback แปลง blank, string ว่าง และ zero เป็น `None`; รายงานแสดงเฉพาะหน่วย px/px², ซ่อน assumed-scale mm/mm² และไม่จัดชั้น plaque จากขนาด. Risk unavailable พร้อมเหตุผลเรื่อง scanner calibration; pipeline ยังคงปฏิเสธ spacing ที่ไม่ finite หรือค่าติดลบ |
+| Wall checkpoint resize provenance | แก้ความคลาดเคลื่อนของการตรวจสอบแล้ว: checkpoint ไม่มี `resize_mode`, แต่ loader เดิม fallback เป็น `stretch`; จึงไม่มี letterbox/restore mismatch ใน checkpoint นี้. Validation score .762632 ทำซ้ำได้ด้วย stretch ไม่ใช่ letterbox. คำสั่งฝึกจริงไม่ถูกเก็บ จึงยังยืนยัน training mode ไม่ได้. เปรียบเทียบ inference และ overlays ที่ `evaluation/wall_geometry_trace_20261030/REPORT.md` |
+| IMT segmentation failure | ยืนยันบน CUBS `test/062`: มี mask ให้คำนวณ 18.762 px แต่ label-derived reference 4.864 px; Dice .339 และ IMT error .8686 mm เมื่อใช้ calibration จริง. ปัญหาคือ wall mask ผิด ไม่ใช่ขาด calibration. ดู overlay ใน evaluation trace |
 | ความน่าเชื่อถือ test | plaque split exploratory และไม่ grouped ตามผู้ป่วย; CUBS มีภาพซ้ำข้าม train/test 2 ภาพ (ตัดออกจาก metric หลัก) และไม่ทราบ patient mapping สำหรับภาพอื่น. การไม่มี exact duplicate ไม่ยืนยัน patient independence |
 | Clinical accuracy | ไม่มี outcome stroke/label risk decision; วัด clinical prediction accuracy ไม่ได้. Dice/IoU/IMT MAE ไม่ใช่หลักฐานว่า High/Low risk ถูกต้องทางคลินิก |
 
-**สรุปสิ่งที่ยืนยันได้:** pipeline แยก plaque/wall segmentation และทำ geometry/calibration ตามโค้ด; checkpoint validation Dice ทำซ้ำได้จากข้อมูลที่มี; ความผิดพลาดเรื่อง demo IMT เข้าคะแนนได้รับการแก้ใน snapshot นี้. **สิ่งที่ยังไม่ยืนยัน:** ความถูกต้องทางคลินิก, ความเป็นอิสระระดับผู้ป่วยของ test, และความถูกต้องของ wall geometry ที่ inference เพราะการคืน letterbox อาจคลาดเคลื่อน. ไม่มีการฝึกหรือประเมินใหม่ระหว่างจัดทำเอกสารนี้.
+**สรุปสิ่งที่ยืนยันได้:** pipeline คำนวณ IMT เป็น px จาก LI/MA แม้ไม่มี calibration; conversion เป็น mm ต้องมี spacing. Checkpoint stretch ทำซ้ำ validation Dice ได้; sample 062 แสดงว่า model segmentation อาจผิดมากแม้ค่าพิกเซลคำนวณได้. **สิ่งที่ยังไม่ยืนยัน:** ภาพที่ผู้ใช้ upload จริงไม่มีใน workspace, training resize mode จริงไม่มี config, ความถูกต้องทางคลินิก และความเป็นอิสระระดับผู้ป่วยของ test. ดู evaluation trace สำหรับผล inference และข้อจำกัด. ไม่มีการฝึกโมเดลหรือเปลี่ยน threshold.

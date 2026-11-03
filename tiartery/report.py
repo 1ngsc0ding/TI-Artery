@@ -52,12 +52,12 @@ def overlay_legend_html() -> str:
 
 def _tier_badge(tier: str | None) -> str:
     if tier is None or tier == "unavailable":
-        return _badge("Risk assessment unavailable", "#fff", "#6b7280")
+        return _badge("Unknown", "#fff", "#6b7280")
     if tier == "low":
-        return _badge("Low screening tier", "#14532d", "#86efac")
+        return _badge("Low Risk", "#14532d", "#86efac")
     if tier == "elevated":
-        return _badge("Elevated screening tier", "#713f12", "#fde68a")
-    return _badge("High screening tier", "#fff", "#ef4444")
+        return _badge("Elevated Risk", "#713f12", "#fde68a")
+    return _badge("High Risk", "#fff", "#ef4444")
 
 
 def _imt_badge(mean_mm: float | None, imt_class: str | None) -> str:
@@ -93,10 +93,6 @@ def summary_card(res: dict, clinician_reviewed: bool = False) -> str:
     imt_class = res.get("imt_class") or "unknown"
     is_demo = imt.get("demo", False)
     assumed_spacing = imt.get("assumed_spacing_mm")
-    mean_mm_est = imt.get("mean_imt_mm_est")
-    max_mm_est = imt.get("max_imt_mm_est")
-    mean_px = imt.get("mean_imt_px")
-    max_px = imt.get("max_imt_px")
 
     risk = res.get("risk") or {}
     tier = risk.get("tier")
@@ -122,17 +118,7 @@ def summary_card(res: dict, clinician_reviewed: bool = False) -> str:
                 warn += f" — assumed pixel spacing {assumed_spacing:.3f} mm/px"
             body += _p(warn, color="#fbbf24")
     else:
-        body += _p("Calibrated IMT in millimetres is unavailable.", strong=True, color="#f87171")
-        if mean_px is not None:
-            px_detail = f"Uncalibrated IMT: mean {mean_px:.2f} px"
-            if max_px is not None:
-                px_detail += f"  |  max {max_px:.2f} px"
-            body += _p(px_detail, color="#c7d2fe")
-        if mean_mm_est is not None:
-            est_detail = f"Demo estimate: mean {mean_mm_est:.3f} mm (not used for scoring)"
-            if max_mm_est is not None:
-                est_detail += f"  |  max {max_mm_est:.3f} mm"
-            body += _p(est_detail, color="#fbbf24")
+        body += _p("IMT could not be measured from this image.", strong=True, color="#f87171")
         if imt.get("note"):
             body += _p(str(imt["note"]), color="#fbbf24")
     body += '</div>'
@@ -178,12 +164,12 @@ def summary_card(res: dict, clinician_reviewed: bool = False) -> str:
 
     # ---- Risk section ----
     body += '<div style="margin-bottom:14px;">'
-    body += '<div style="font-size:12px;color:#a5b4fc;margin-bottom:6px;font-weight:700;">UNVALIDATED RULE-BASED SCREENING SCORE</div>'
+    body += '<div style="font-size:12px;color:#a5b4fc;margin-bottom:6px;font-weight:700;">STROKE RISK SCREENING</div>'
 
     if tier and tier != "unavailable":
         body += f'<div style="margin-bottom:8px;">{_tier_badge(tier)}</div>'
         if score is not None:
-            body += _p(f"Score: {score} out of 8 possible points", color="#c7d2fe")
+            body += _p(f"Risk score: {score} / 8 factors considered", color="#c7d2fe")
         # plaque finding
         if plaque_present is True:
             body += _p("✓ Plaque detected on B-mode", color="#f87171")

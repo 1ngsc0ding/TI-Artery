@@ -55,11 +55,11 @@ def analyze(image, age, sbp, ldl, smoking, diabetes, pixel_spacing, clinician_re
             path, model=_plaque, device=DEVICE,
             plaque_threshold=THRESHOLD, plaque_min_area=MIN_AREA,
             wall_model_path=_wall_path,
-            pixel_spacing_mm=float(pixel_spacing) if pixel_spacing is not None else None,
+            pixel_spacing_mm=float(pixel_spacing) if pixel_spacing else None,
             denoise="both",
             clinical={"age": int(age) if age is not None else None,
                       "sbp": sbp, "ldl": ldl,
-                      "smoking": _yes_no(smoking), "diabetes": _yes_no(diabetes)})
+                      "smoking": bool(smoking), "diabetes": bool(diabetes)})
     finally:
         if os.path.exists(path):
             os.unlink(path)
@@ -68,12 +68,6 @@ def analyze(image, age, sbp, ldl, smoking, diabetes, pixel_spacing, clinician_re
     annotated_rgb = annotated[:, :, ::-1] if annotated is not None else None
     v = report.format_view(res, bool(clinician_reviewed))
     return annotated_rgb, v["summary"]
-
-
-def _yes_no(value):
-    if value in (None, "Not provided"):
-        return None
-    return value == "Yes"
 
 
 CSS = """
@@ -95,9 +89,8 @@ body, .gradio-container {
 }
 """
 
-with gr.Blocks(title="TI-Artery — Carotid IMT & Stroke Risk",
-               theme=gr.themes.Base(primary_hue="violet", neutral_hue="slate"),
-               css=CSS) as demo:
+with gr.Blocks(title="TI-Artery — Carotid IMT & Stroke Risk", css=CSS,
+               theme=gr.themes.Base(primary_hue="violet", neutral_hue="slate")) as demo:
 
     gr.HTML("""
     <div style="text-align:center;padding:28px 16px 8px;">
@@ -131,17 +124,15 @@ with gr.Blocks(title="TI-Artery — Carotid IMT & Stroke Risk",
                     'letter-spacing:.08em;text-transform:uppercase;margin:14px 0 8px;">'
                     'Clinical Parameters (optional)</div>')
             with gr.Row():
-                age = gr.Number(label="Age (years)", value=None, minimum=18, maximum=120)
-                sbp = gr.Number(label="Systolic BP (mmHg)", value=None)
+                age = gr.Number(label="Age (years)", value=65, minimum=18, maximum=120)
+                sbp = gr.Number(label="Systolic BP (mmHg)", value=130)
             with gr.Row():
-                ldl = gr.Number(label="LDL (mg/dL)", value=None)
+                ldl = gr.Number(label="LDL (mg/dL)", value=110)
                 spacing = gr.Number(label="Pixel spacing (mm/px)", value=None,
                                     info="From scanner — leave blank to use a demo estimate")
             with gr.Row():
-                smoking = gr.Dropdown(["Not provided", "No", "Yes"], value="Not provided",
-                                      label="Smoking")
-                diabetes = gr.Dropdown(["Not provided", "No", "Yes"], value="Not provided",
-                                       label="Diabetes")
+                smoking = gr.Checkbox(label="Smoking")
+                diabetes = gr.Checkbox(label="Diabetes")
             reviewed = gr.Checkbox(
                 label="I am a clinician and will review this result",
                 value=False)
@@ -174,7 +165,4 @@ with gr.Blocks(title="TI-Artery — Carotid IMT & Stroke Risk",
     """)
 
 if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", "7860")),
-    )
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")))

@@ -62,3 +62,4 @@ The last stored evaluation is in `evaluation/accuracy_20261030/REPORT.md` and `m
 - `train_plaque_unet.py`, `train_wall_unet.py`: training code (not run by the app).
 - `tests/`: regression and workflow tests.
 - `PROJECT_SUMMARY_TH.md`: detailed Thai summary of current code, datasets, checkpoints, and existing evaluation evidence.
+# TI_Artery
